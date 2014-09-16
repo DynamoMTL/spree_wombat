@@ -36,7 +36,20 @@ module Spree
         expect(serialized_shipment["stock_location"]).to eql shipment.stock_location.name
       end
 
+      it "serializes the shipping_method.admin_name as shipping_method" do
+        allow_any_instance_of(Spree::ShippingMethod).to receive(:admin_name).and_return 'foo'
+        expect(shipment.shipping_method.admin_name).to_not eql nil
+        expect(serialized_shipment["shipping_method"]).to eql shipment.shipping_method.admin_name
+      end
+
+      it "serializes the shipping_method.name as shipping_method, if admin_name not present" do
+        allow_any_instance_of(Spree::ShippingMethod).to receive(:admin_name).and_return ''
+        expect(shipment.shipping_method.name).to_not eql nil
+        expect(serialized_shipment["shipping_method"]).to eql shipment.shipping_method.name
+      end
+
       it "serializes the shipping_method.name as shipping_method" do
+        expect(shipment.shipping_method.admin_name).to eql nil
         expect(shipment.shipping_method.name).to_not eql nil
         expect(serialized_shipment["shipping_method"]).to eql shipment.shipping_method.name
       end
