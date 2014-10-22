@@ -15,6 +15,9 @@ module Spree
 
           external_id = shipment.delete(:id)
 
+          existing_shipment = Spree::Shipment.find_by_number(external_id)
+          return response("Already have a shipment for order #{order_number} associated with shipment number #{external_id}", 200) if existing_shipment
+
           address_attributes = shipment.delete(:shipping_address)
           country_iso = address_attributes.delete(:country)
           country = Spree::Country.find_by_iso(country_iso)
@@ -36,12 +39,12 @@ module Spree
           email = shipment.delete(:email)
 
           stock_location_name = shipment.delete(:stock_location)
-          stock_location = Spree::StockLocation.find_by_name(stock_location_name)
+          stock_location = Spree::StockLocation.find_by_name(stock_location_name) || Spree::StockLocation.find_by_admin_name(stock_location_name)
           return response("Can't find a StockLocation with name #{stock_location_name}!", 500) unless stock_location
           shipment[:stock_location_id] = stock_location.id
 
           shipping_method_name = shipment.delete(:shipping_method)
-          shipping_method = Spree::ShippingMethod.find_by_name(shipping_method_name)
+          shipping_method = Spree::ShippingMethod.find_by_name(shipping_method_name) || Spree::ShippingMethod.find_by_admin_name(shipping_method_name)
           return response("Can't find a ShippingMethod with name #{shipping_method_name}!", 500) unless shipping_method
 
           # build the inventory units
@@ -84,6 +87,7 @@ module Spree
           shipment_attributes["inventory_units_attributes"] = inventory_units_attributes
           shipment_attributes["address_attributes"] = address_attributes
           shipment_attributes["number"] = external_id
+          shipment_attributes["state"] ||= 'pending'
           shipment = Spree::Shipment.create!(shipment_attributes)
           shipment.shipping_methods << shipping_method
           shipment.refresh_rates
@@ -94,7 +98,15 @@ module Spree
           order.updater.update_shipment_state
           order.updater.update
 
-          return response("Added shipment #{shipment.number} for order #{order.number}")
+          #make sure we set the provided cost, since the order updater is refreshing the shipment rates
+          # based on the shipping method.
+          shipment.update_columns(cost: shipment_attributes[:cost]) if shipment_attributes[:cost].present?
+
+          shipments_payload = []
+          shipment.order.reload.shipments.each do |shipment|
+            shipments_payload << ShipmentSerializer.new(shipment.reload, root: false).serializable_hash
+          end
+          return response("Added shipment #{shipment.number} for order #{order.number}", 200, Base.wombat_objects_for(shipment))
         end
 
       end

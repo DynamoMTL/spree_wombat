@@ -5,7 +5,7 @@ module Spree
     describe ProductSerializer do
 
       let(:product) { create(:product, height: 1, width: 1, depth: 1) }
-        let(:serialized_product) { JSON.parse( ProductSerializer.new(product, root: false).to_json) }
+      let(:serialized_product) { JSON.parse( ProductSerializer.new(product, root: false).to_json) }
 
       context "format" do
 
@@ -101,7 +101,7 @@ module Spree
             expect(serialized_product["images"].count).to be 3
             dimension_hash = {"height" => 490, "width" => 489}
             3.times.each_with_index do |i|
-              expect(serialized_product["images"][i]["url"]).to match /http:\/\/myapp.dev\/spree\/products\/\d*\/original\/thinking-cat.jpg\?\d*/
+              expect(serialized_product["images"][i]["url"]).to match /http:\/\/myapp.dev\/spree\/products\/\d*\/original\/thinking-cat.jpg\z/
               expect(serialized_product["images"][i]["position"]).to eql i
               expect(serialized_product["images"][i]["title"]).to eql "variant image #{i}"
               expect(serialized_product["images"][i]["type"]).to eql "original"
@@ -111,15 +111,16 @@ module Spree
         end
 
         context "without variants" do
-          it "returns [] for 'variants'" do
-            expect(serialized_product["variants"]).to eql []
+          it "returns master variant in 'variants' key" do
+            master_product = {"sku"=>product.master.sku, "price"=>19.99, "cost_price"=>17.0, "options"=>{}, "weight"=>"0.0", "height"=>"1.0", "width"=>"1.0", "depth"=>"1.0", "images"=>[]}
+            expect(serialized_product["variants"]).to eql [master_product]
           end
         end
 
         context "with variants" do
           let!(:product) {create(:product_with_option_types)}
           let!(:variant) { create(:variant, :product => product) }
-          it "serialized the variant as nested objects" do
+          it "serialized the variant and master as nested objects" do
             product.reload
             expect(serialized_product["variants"].count).to eql 1
           end

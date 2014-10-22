@@ -39,20 +39,19 @@ module Spree
           email = shipment_hsh.delete(:email)
 
           stock_location_name = shipment_hsh.delete(:stock_location)
-          stock_location = Spree::StockLocation.find_by_name(stock_location_name)
+          stock_location = Spree::StockLocation.find_by_name(stock_location_name) || Spree::StockLocation.find_by_admin_name(stock_location_name)
           return response("Can't find a StockLocation with name #{stock_location_name}!", 500) unless stock_location
           shipment_hsh[:stock_location_id] = stock_location.id
 
           shipping_method_name = shipment_hsh.delete(:shipping_method)
-          shipping_method = Spree::ShippingMethod.find_by_admin_name(shipping_method_name)
-          shipping_method ||= Spree::ShippingMethod.find_by_name(shipping_method_name)
+          shipping_method = Spree::ShippingMethod.find_by_name(shipping_method_name) || Spree::ShippingMethod.find_by_admin_name(shipping_method_name)
           return response("Can't find a ShippingMethod with name #{shipping_method_name}!", 500) unless shipping_method
 
           shipment_attributes = shipment_hsh.slice *Spree::Shipment.attribute_names
-          shipment_attributes["address_attributes"] = address_attributes
+          shipment_attributes["address_attributes"] = address_attributes if address_attributes
 
           missing_variants = []
-          missing_line_items = []
+          missing_inventory_units = []
 
           shipping_items = shipment_hsh.delete(:items)
           if shipping_items
@@ -66,24 +65,31 @@ module Spree
                 next
               end
 
-              line_item_id = shipment.order.line_items.where(variant_id: variant.id).pluck(:id).first
-              unless line_item_id
-                missing_line_items << sku
+              inventory_unit_id = shipment.inventory_units.where(variant_id: variant.id).pluck(:id).first
+              unless inventory_unit_id
+                missing_inventory_units << sku
                 next
               end
             end
 
             # check on items sku and quantity
-            shipment_lines = shipment.line_items.map { |li| {sku: li.variant.sku, quantity: li.quantity} }
-            received_shipping_items = shipping_items.map { |item| {sku: item[:product_id], quantity: item[:quantity]} }
+            shipment_lines = shipment.inventory_units.map do |inventory_unit|
+              quantity = inventory_unit.respond_to?(:quantity) ? inventory_unit.quantity : 1
+              { sku: inventory_unit.variant.sku, quantity: quantity }
+            end
 
-            shipping_items_diff = received_shipping_items - shipment_lines
+            received_shipping_items = shipping_items.map { |item| {sku: item[:product_id], quantity: item[:quantity].to_i} }
+
+            shipping_items_diff = received_shipping_items.reject do |item|
+              # using Array#delete deletes all of the instances of the item, we just want to delete the first
+              index_of_item = shipment_lines.index(item)
+              index_of_item && shipment_lines.delete_at(index_of_item)
+            end
 
             return response("The received shipment items do not match with the shipment, diff: #{shipping_items_diff}", 500) unless shipping_items_diff.empty?
 
             return response("Can't find variants with the following skus: #{missing_variants.join(', ')}", 500) unless missing_variants.empty?
-            return response("Can't find line_items with the following skus: #{missing_line_items.join(', ')} in the order.", 500) unless missing_line_items.empty?
-
+            return response("Can't find inventory_units with the following skus: #{missing_inventory_units.join(', ')} in the order.", 500) unless missing_inventory_units.empty?
           end
 
           # check if a state transition is required, and search for correct event to fire
@@ -113,7 +119,11 @@ module Spree
           shipment.order.updater.update_shipment_state
           shipment.order.updater.update
 
-          return response("Updated shipment #{shipment_number}")
+          #make sure we set the provided cost, since the order updater is refreshing the shipment rates
+          # based on the shipping method.
+          shipment.update_columns(cost: shipment_attributes[:cost]) if shipment_attributes[:cost].present?
+
+          return response("Updated shipment #{shipment_number}", 200, Base.wombat_objects_for(shipment))
         end
 
       end

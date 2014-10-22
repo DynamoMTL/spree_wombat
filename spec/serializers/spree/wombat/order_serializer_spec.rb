@@ -20,8 +20,15 @@ module Spree
           expect(serialized_order["status"]).to eql order.state
         end
 
-        it "sets the channel to spree" do
-          expect(serialized_order["channel"]).to eql "spree"
+        context '#channel' do
+          it "sets the channel to spree if unset" do
+            expect(serialized_order["channel"]).to eql "spree"
+          end
+
+          it "sets the channel to existing value other than spree" do
+            order.update_column :channel, 'wombat'
+            expect(serialized_order["channel"]).to eql "wombat"
+          end
         end
 
         it "set's the placed_on to completed_at date in ISO format" do
@@ -57,14 +64,27 @@ module Spree
               create(:adjustment, adjustable: order, source_type: 'Spree::PromotionAction', amount: -10)
               create(:adjustment, adjustable: order.line_items.first, source_type: 'Spree::PromotionAction', amount: -10)
               create(:adjustment, adjustable: order.shipments.first, source_type: 'Spree::PromotionAction', amount: -10)
+              #create(:adjustment, adjustable: order, source_type: nil, source_id: nil, amount: -10, label: 'Manual discount')
               order.update_totals
             end
 
             it "discount matches order promo total value" do
               discount_hash = serialized_order["adjustments"].select { |a| a["name"] == "discount" }.first
-              expect(discount_hash["value"]).to eq order.adjustment_total.to_f
+              expect(discount_hash["value"]).to eq -30.0
             end
           end
+
+          context 'manual tax from import' do
+            before do
+              create(:adjustment, adjustable: order, source_type: nil, source_id: nil, amount: 1.14, label: 'Tax')
+              order.update_totals
+            end
+
+            it "tax_total matches the manual value" do
+              expect(serialized_order["totals"]["tax"]).to eql 1.14
+            end
+          end
+
         end
       end
     end
