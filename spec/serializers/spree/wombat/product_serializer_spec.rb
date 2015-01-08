@@ -75,9 +75,10 @@ module Spree
         end
 
         context "options" do
-          let(:product) {create(:product_with_option_types)}
+          let(:product) { create(:product_with_option_types) }
           it "returns an array with the option_types" do
-            expect(serialized_product["options"]).to eql ["foo-size"]
+            expect(serialized_product["options"].first).to match "foo-size-"
+            expect(serialized_product["options"].size).to eq 1
           end
         end
 
@@ -93,7 +94,7 @@ module Spree
             ActionController::Base.asset_host = "http://myapp.dev"
             image = File.open(File.expand_path('../../../../fixtures/thinking-cat.jpg', __FILE__))
             3.times.each_with_index do |i|
-              product.images.create!(attachment: image, position: i, alt: "variant image #{i}")
+              product.images.create!(attachment: image, alt: "variant image #{i}")
             end
           end
 
@@ -102,7 +103,7 @@ module Spree
             dimension_hash = {"height" => 490, "width" => 489}
             3.times.each_with_index do |i|
               expect(serialized_product["images"][i]["url"]).to match /http:\/\/myapp.dev\/spree\/products\/\d*\/original\/thinking-cat.jpg\z/
-              expect(serialized_product["images"][i]["position"]).to eql i
+              expect(serialized_product["images"][i]["position"]).to eql (i + 1)
               expect(serialized_product["images"][i]["title"]).to eql "variant image #{i}"
               expect(serialized_product["images"][i]["type"]).to eql "original"
               expect(serialized_product["images"][i]["dimensions"]).to eql dimension_hash
@@ -118,8 +119,8 @@ module Spree
         end
 
         context "with variants" do
-          let!(:product) {create(:product_with_option_types)}
-          let!(:variant) { create(:variant, :product => product) }
+          let!(:product) { create(:product_with_option_types) }
+          let!(:variant) { create(:variant, product: product) }
           it "serialized the variant and master as nested objects" do
             product.reload
             expect(serialized_product["variants"].count).to eql 1

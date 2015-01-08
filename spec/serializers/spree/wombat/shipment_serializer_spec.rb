@@ -107,12 +107,12 @@ module Spree
 
         let(:totals) do
           {
-            "item"=> 50.0,
+            "item"=> 10.0,
             "adjustment"=> 0.0,
             "tax"=> 0.0,
             "shipping"=> 100.0,
             "payment"=> 0.0,
-            "order"=> 150.0
+            "order"=> 110.0
           }
         end
 
