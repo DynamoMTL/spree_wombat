@@ -5,7 +5,7 @@ module Spree
     module Handler
       class ProductHandlerBase < Base
 
-        attr_accessor :params, :children_params, :master_images, :taxon_ids,
+        attr_accessor :params, :children_params, :master_images, :taxons_list, :taxon_ids,
                       :root_options, :properties
 
         def initialize(message)
@@ -16,12 +16,13 @@ module Spree
           #posible master images
           @master_images = @params.delete(:images)
           @taxon_ids = []
+          @taxons_list = @params.delete(:taxons)
         end
 
         def root_product_attrs
           permalink = @params.delete(:permalink)
           shipping_category_name = @params.delete(:shipping_category)
-          process_taxons(@params.delete(:taxons))
+          process_taxons(@taxons_list)
           @root_options = @params.delete(:options)
           @properties = @params.delete(:properties)
 
@@ -33,7 +34,7 @@ module Spree
           sku = @params[:sku]
           @params = @params.slice *Spree::Product.attribute_names
           @params.delete(:id) # Reject ID as it should be set by database or else it could convert to 0 in postgresql.
-          @params[:taxon_ids] = Spree::Taxon.where(id: @taxon_ids).leaves.pluck(:id)
+          @params[:taxon_ids] = Spree::Taxon.where(id: @taxon_ids).leaves.pluck(:id) unless @taxons_list.nil?
           @params[:price] = price
           @params[:sku] = sku
           @params
@@ -90,12 +91,12 @@ module Spree
           if taxon
             parent.children << taxon
           else
-            taxon = parent.children.create(name: taxon_name, position: position)
+            taxon = parent.children.create!(name: taxon_name, position: position)
           end
           parent.save
           # store the taxon so we can assign it later
           @taxon_ids << taxon.id
-          add_taxon(taxon, taxon_names, position+1)
+          add_taxon(taxon, taxon_names, position + 1)
         end
 
         def process_images(variant, images)
@@ -118,15 +119,13 @@ module Spree
             option_type_values = child_product.delete(:options)
             images = child_product.delete(:images)
             price = child_product[:price]
-            child_product = child_product.slice *Spree::Variant.attribute_names
+            child_product = child_product.slice(*Spree::Variant.attribute_names).except(:id, :product_id)
             child_product[:options] = option_type_values.collect {|k,v| {name: k, value: v} }
             child_product[:price] = price
-            variant = product.variants.find_by_sku(child_product[:sku])
-            if variant
-              variant.update_attributes(child_product)
-            else
-              variant = product.variants.create({ product: product }.merge(child_product))
-            end
+
+            variant = Spree::Variant.unscoped.where(sku: child_product[:sku], product: product).first_or_initialize
+            variant.update_attributes!(child_product)
+
             process_images(variant, images)
           end
         end

@@ -157,7 +157,7 @@ module Spree
             context "the customer return raises an IncompleteReimbursement error" do
               before do
                 expect_any_instance_of(Spree::Reimbursement).to(
-                  receive(:perform!).and_raise(Spree::Reimbursement::IncompleteReimbursement)
+                  receive(:perform!).and_raise(Spree::Reimbursement::IncompleteReimbursementError)
                 )
               end
               it_behaves_like "receives the return items", /Customer return \d+ processed but not fully reimbursed/
@@ -243,7 +243,9 @@ module Spree
           end
 
           context "there is a mix of created and new return items" do
-            let(:return_item) { order.inventory_units.last.current_or_new_return_item.tap(&:save) }
+            let(:return_item) do
+              order.inventory_units.order(:id).last.current_or_new_return_item.tap(&:save)
+            end
 
             before do
               rma.return_items << return_item
