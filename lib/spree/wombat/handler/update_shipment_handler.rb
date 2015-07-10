@@ -22,8 +22,8 @@ module Spree
 
             state_name = address_attributes.delete(:state)
             if state_name
-              state = Spree::State.find_by_name(state_name)
-              state = Spree::State.find_by_abbr(state_name) unless state
+              state = country.states.find_by_name(state_name)
+              state = country.states.find_by_abbr(state_name) unless state
               if state
                 address_attributes[:state_id] = state.id
               else
