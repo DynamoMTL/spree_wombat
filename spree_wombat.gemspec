@@ -13,7 +13,7 @@ Gem::Specification.new do |gem|
   gem.require_paths = ["lib"]
   gem.version       = '2.2.0'
 
-  gem.add_dependency 'spree_core', '~> 2.4.0.rc4'
+  gem.add_dependency "solidus_core", [">= 1.1.0.pre", "< 1.2.0"]
   gem.add_dependency 'active_model_serializers', '~> 0.8.3'
   gem.add_dependency 'httparty'
 
